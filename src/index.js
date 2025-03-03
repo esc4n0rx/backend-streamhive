@@ -8,23 +8,26 @@ const socketIo = require('socket.io');
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+const corsOptions = {
+  origin: 'https://streamhivex.vercel.app',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
-// Criação do servidor HTTP e instância do Socket.IO
 const server = http.createServer(app);
 const io = socketIo(server);
-global.io = io; // Disponibiliza globalmente para os controllers que precisam emitir eventos
+global.io = io; 
 
-// Eventos do Socket.IO
 io.on('connection', (socket) => {
   console.log('Novo cliente conectado:', socket.id);
 
   // Evento: player:update
   socket.on('player:update', (payload) => {
-    // Broadcast para todos exceto o remetente (caso queira incluir o remetente, use io.emit)
     socket.broadcast.emit('player:update', payload);
-    
   });
 
   // Evento: user:joined
@@ -37,7 +40,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// Rotas de autenticação e streams (já configuradas anteriormente)
+// Rotas de autenticação e streams
 const authRoutes = require('./routes/auth.routes');
 const streamsRoutes = require('./routes/streams.routes');
 const messagesRoutes = require('./routes/messages.routes');
