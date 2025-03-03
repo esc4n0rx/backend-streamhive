@@ -20,7 +20,14 @@ app.options('*', cors(corsOptions));
 app.use(express.json());
 
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = socketIo(server, {
+  cors: {
+    origin: 'https://streamhivex.vercel.app',
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  }
+});
 global.io = io;
 
 
@@ -52,7 +59,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on('reaction:sent', (data) => {
-    // data deve conter roomId, emoji e informações adicionais se necessário
     socket.to(data.roomId).emit('reaction:sent', data);
   });
 
@@ -62,7 +68,6 @@ io.on('connection', (socket) => {
 });
 
 
-// Rotas de autenticação e streams
 const authRoutes = require('./routes/auth.routes');
 const streamsRoutes = require('./routes/streams.routes');
 const messagesRoutes = require('./routes/messages.routes');
