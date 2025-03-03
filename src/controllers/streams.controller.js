@@ -1,6 +1,42 @@
 // src/controllers/streams.controller.js
 const supabase = require('../config/supabase');
 
+
+
+
+const listPublicStreams = async (req, res) => {
+  try {
+    // Seleciona streams públicas e junta com a tabela de usuários para obter o nome do host
+    const { data, error } = await supabase
+      .from('streamhive_streams')
+      .select('*, streamhive_users(name)')
+      .eq('is_public', true);
+
+    if (error) {
+      return res.status(500).json({ message: 'Erro ao buscar transmissões públicas.', error });
+    }
+
+    // Formata os dados para enviar ao frontend
+    const formattedStreams = data.map((stream) => ({
+      id: stream.id,
+      title: stream.title,
+      description: stream.description,
+      host: stream.streamhive_users ? stream.streamhive_users.name : 'Desconhecido',
+      isPublic: stream.is_public,
+      videoUrl: stream.video_url,
+      // Se necessário, você pode incluir uma lógica para contar os participantes
+      viewers: 0
+    }));
+
+    return res.status(200).json(formattedStreams);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Erro interno.' });
+  }
+};
+
+
+
 const createStream = async (req, res) => {
     const { title, description, isPublic, videoUrl } = req.body;
     if (!title || !videoUrl) {

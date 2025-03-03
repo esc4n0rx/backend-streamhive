@@ -7,6 +7,9 @@ const authMiddleware = require('../middleware/auth.middleware');
 // Criar nova sala (requer autenticação)
 router.post('/create', authMiddleware, streamsController.createStream);
 
+// Rota para listar todas as transmissões públicas
+router.get('/', streamsController.listPublicStreams);
+
 // Obter detalhes da sala (pode ser acessado sem autenticação, conforme especificado)
 router.get('/:id', streamsController.getStreamDetails);
 
