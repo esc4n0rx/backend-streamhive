@@ -1,4 +1,3 @@
-// src/index.js
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -9,28 +8,30 @@ dotenv.config();
 
 const app = express();
 
+// Configure o CORS para permitir o domínio do seu frontend
 const corsOptions = {
-  origin: 'https://streamhivex.vercel.app',
+  origin: 'https://streamhivex.vercel.app', // Ou '*' para liberar todas as origens (apenas para teste)
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 };
 
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Habilita o preflight para todas as rotas
+
 app.use(express.json());
 
+// Resto da configuração do servidor, rotas, Socket.IO, etc.
 const server = http.createServer(app);
 const io = socketIo(server);
-global.io = io; 
+global.io = io;
 
 io.on('connection', (socket) => {
   console.log('Novo cliente conectado:', socket.id);
 
-  // Evento: player:update
   socket.on('player:update', (payload) => {
     socket.broadcast.emit('player:update', payload);
   });
 
-  // Evento: user:joined
   socket.on('user:joined', (payload) => {
     socket.broadcast.emit('user:joined', payload);
   });
