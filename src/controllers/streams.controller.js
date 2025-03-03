@@ -1,12 +1,7 @@
-// src/controllers/streams.controller.js
 const supabase = require('../config/supabase');
-
-
-
 
 const listPublicStreams = async (req, res) => {
   try {
-    // Seleciona streams públicas e junta com a tabela de usuários para obter o nome do host
     const { data, error } = await supabase
       .from('streamhive_streams')
       .select('*, streamhive_users(name)')
@@ -16,7 +11,15 @@ const listPublicStreams = async (req, res) => {
       return res.status(500).json({ message: 'Erro ao buscar transmissões públicas.', error });
     }
 
-    // Formata os dados para enviar ao frontend
+    const { count, error: countError } = await supabase
+      .from('streamhive_stream_participants')
+      .select('*', { count: 'exact', head: true })
+      .eq('stream_id', id);
+
+    if (countError) {
+      return res.status(500).json({ message: 'Erro ao contar espectadores.' });
+    }
+
     const formattedStreams = data.map((stream) => ({
       id: stream.id,
       title: stream.title,
@@ -24,8 +27,7 @@ const listPublicStreams = async (req, res) => {
       host: stream.streamhive_users ? stream.streamhive_users.name : 'Desconhecido',
       isPublic: stream.is_public,
       videoUrl: stream.video_url,
-      // Se necessário, você pode incluir uma lógica para contar os participantes
-      viewers: 0
+      viewers: count
     }));
 
     return res.status(200).json(formattedStreams);
@@ -34,8 +36,6 @@ const listPublicStreams = async (req, res) => {
     return res.status(500).json({ message: 'Erro interno.' });
   }
 };
-
-
 
 const createStream = async (req, res) => {
     const { title, description, isPublic, videoUrl } = req.body;
@@ -53,7 +53,7 @@ const createStream = async (req, res) => {
           video_url: videoUrl,
           host_id: req.user.id
         }])
-        .select() // Retorna os dados inseridos
+        .select()
         .single();
   
       if (error || !data) {
@@ -82,7 +82,6 @@ const getStreamDetails = async (req, res) => {
       return res.status(404).json({ message: 'Sala não encontrada.' });
     }
 
-    // Obter o nome do host
     const { data: host, error: hostError } = await supabase
       .from('streamhive_users')
       .select('name')
@@ -93,7 +92,6 @@ const getStreamDetails = async (req, res) => {
       return res.status(404).json({ message: 'Host não encontrado.' });
     }
 
-    // Contar o número de participantes (viewers)
     const { count, error: countError } = await supabase
       .from('streamhive_stream_participants')
       .select('*', { count: 'exact', head: true })
@@ -121,7 +119,6 @@ const getStreamDetails = async (req, res) => {
 const joinStream = async (req, res) => {
   const { id } = req.params;
   try {
-    // Insere o participante na sala
     const { data, error } = await supabase
       .from('streamhive_stream_participants')
       .insert([{ stream_id: id, user_id: req.user.id }]);
@@ -130,7 +127,6 @@ const joinStream = async (req, res) => {
       return res.status(500).json({ message: 'Erro ao entrar na sala.', error });
     }
 
-    // Contar o número de participantes após a entrada
     const { count, error: countError } = await supabase
       .from('streamhive_stream_participants')
       .select('*', { count: 'exact', head: true })
@@ -150,7 +146,6 @@ const joinStream = async (req, res) => {
 const leaveStream = async (req, res) => {
   const { id } = req.params;
   try {
-    // Remove o participante da sala
     const { data, error } = await supabase
       .from('streamhive_stream_participants')
       .delete()
@@ -161,7 +156,6 @@ const leaveStream = async (req, res) => {
       return res.status(500).json({ message: 'Erro ao sair da sala.', error });
     }
 
-    // Contar os participantes restantes
     const { count, error: countError } = await supabase
       .from('streamhive_stream_participants')
       .select('*', { count: 'exact', head: true })
@@ -181,7 +175,6 @@ const leaveStream = async (req, res) => {
 const deleteStream = async (req, res) => {
   const { id } = req.params;
   try {
-    // Busca a sala
     const { data: stream, error: fetchError } = await supabase
       .from('streamhive_streams')
       .select('*')
@@ -192,12 +185,10 @@ const deleteStream = async (req, res) => {
       return res.status(404).json({ message: 'Sala não encontrada.' });
     }
 
-    // Verifica se o usuário autenticado é o host
     if (stream.host_id !== req.user.id) {
       return res.status(403).json({ message: 'Apenas o host pode encerrar a transmissão.' });
     }
 
-    // Remove a sala (isso também removerá os participantes, se houver cascata)
     const { data, error } = await supabase
       .from('streamhive_streams')
       .delete()
@@ -216,6 +207,7 @@ const deleteStream = async (req, res) => {
 
 module.exports = {
   createStream,
+  listPublicStreams,
   getStreamDetails,
   joinStream,
   leaveStream,
