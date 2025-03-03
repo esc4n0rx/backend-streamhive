@@ -47,11 +47,10 @@ const sendMessage = async (req, res) => {
       return res.status(500).json({ message: 'Erro ao enviar mensagem.', error });
     }
 
-    // Opcional: Emitir um evento via WebSocket para atualizar o chat em tempo real
     if (global.io) {
-      global.io.emit('chat:new-message', {
+      global.io.to(id).emit('chat:new-message', {
         text,
-        user: req.user.email, // ou, se desejar, busque o nome do usuário
+        user: req.user.email,
         timestamp: data.created_at
       });
     }

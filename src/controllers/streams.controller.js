@@ -2,7 +2,7 @@ const supabase = require('../config/supabase');
 
 const listPublicStreams = async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const { data: streams, error } = await supabase
       .from('streamhive_streams')
       .select('*, streamhive_users(name)')
       .eq('is_public', true);
@@ -11,24 +11,35 @@ const listPublicStreams = async (req, res) => {
       return res.status(500).json({ message: 'Erro ao buscar transmissões públicas.', error });
     }
 
-    const { count, error: countError } = await supabase
-      .from('streamhive_stream_participants')
-      .select('*', { count: 'exact', head: true })
-      .eq('stream_id', id);
+    const formattedStreams = await Promise.all(
+      streams.map(async (stream) => {
+        const { count, error: countError } = await supabase
+          .from('streamhive_stream_participants')
+          .select('*', { count: 'exact', head: true })
+          .eq('stream_id', stream.id);
 
-    if (countError) {
-      return res.status(500).json({ message: 'Erro ao contar espectadores.' });
-    }
-
-    const formattedStreams = data.map((stream) => ({
-      id: stream.id,
-      title: stream.title,
-      description: stream.description,
-      host: stream.streamhive_users ? stream.streamhive_users.name : 'Desconhecido',
-      isPublic: stream.is_public,
-      videoUrl: stream.video_url,
-      viewers: count
-    }));
+        if (countError) {
+          return {
+            id: stream.id,
+            title: stream.title,
+            description: stream.description,
+            host: stream.streamhive_users ? stream.streamhive_users.name : 'Desconhecido',
+            isPublic: stream.is_public,
+            videoUrl: stream.video_url,
+            viewers: 0
+          };
+        }
+        return {
+          id: stream.id,
+          title: stream.title,
+          description: stream.description,
+          host: stream.streamhive_users ? stream.streamhive_users.name : 'Desconhecido',
+          isPublic: stream.is_public,
+          videoUrl: stream.video_url,
+          viewers: count || 0
+        };
+      })
+    );
 
     return res.status(200).json(formattedStreams);
   } catch (err) {
@@ -36,6 +47,7 @@ const listPublicStreams = async (req, res) => {
     return res.status(500).json({ message: 'Erro interno.' });
   }
 };
+
 
 const createStream = async (req, res) => {
     const { title, description, isPublic, videoUrl } = req.body;
@@ -134,6 +146,10 @@ const joinStream = async (req, res) => {
 
     if (countError) {
       return res.status(500).json({ message: 'Erro ao contar espectadores.' });
+    }
+
+    if (global.io) {
+      global.io.to(id).emit('user:joined', { username: req.user.email });
     }
 
     return res.status(200).json({ message: 'Usuário entrou na sala', viewers: count });

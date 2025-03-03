@@ -8,38 +8,59 @@ dotenv.config();
 
 const app = express();
 
-// Configure o CORS para permitir o domínio do seu frontend
 const corsOptions = {
-  origin: 'https://streamhivex.vercel.app', // Ou '*' para liberar todas as origens (apenas para teste)
+  origin: 'https://streamhivex.vercel.app', 
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Habilita o preflight para todas as rotas
+app.options('*', cors(corsOptions)); 
 
 app.use(express.json());
 
-// Resto da configuração do servidor, rotas, Socket.IO, etc.
 const server = http.createServer(app);
 const io = socketIo(server);
 global.io = io;
 
+
+let latestPlayerStates = {}; 
+
 io.on('connection', (socket) => {
   console.log('Novo cliente conectado:', socket.id);
 
-  socket.on('player:update', (payload) => {
-    socket.broadcast.emit('player:update', payload);
+  socket.on('join-room', (roomId) => {
+    socket.join(roomId);
+    console.log(`Socket ${socket.id} entrou na sala ${roomId}`);
+    
+    if (latestPlayerStates[roomId]) {
+      socket.emit('player:update', { event: 'player:update', data: latestPlayerStates[roomId] });
+    }
+    
+    socket.to(roomId).emit('user:joined', { event: 'user:joined', data: { username: 'Novo usuário' } });
   });
 
-  socket.on('user:joined', (payload) => {
-    socket.broadcast.emit('user:joined', payload);
+  socket.on('player:update', (payload) => {
+    const { roomId, data } = payload;
+    latestPlayerStates[roomId] = data;
+    socket.to(roomId).emit('player:update', payload);
+  });
+
+  socket.on('chat:new-message', (message) => {
+
+    socket.to(message.roomId).emit('chat:new-message', message);
+  });
+
+  socket.on('reaction:sent', (data) => {
+    // data deve conter roomId, emoji e informações adicionais se necessário
+    socket.to(data.roomId).emit('reaction:sent', data);
   });
 
   socket.on('disconnect', () => {
     console.log('Cliente desconectado:', socket.id);
   });
 });
+
 
 // Rotas de autenticação e streams
 const authRoutes = require('./routes/auth.routes');
