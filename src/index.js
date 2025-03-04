@@ -72,11 +72,13 @@ const authRoutes = require('./routes/auth.routes');
 const streamsRoutes = require('./routes/streams.routes');
 const messagesRoutes = require('./routes/messages.routes');
 const reactionsRoutes = require('./routes/reactions.routes');
+const proxyRoutes = require('./routes/proxy.routes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/streams', streamsRoutes);
 app.use('/api/streams', messagesRoutes);
 app.use('/api/streams', reactionsRoutes);
+app.use('/api/proxy', proxyRoutes);
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
