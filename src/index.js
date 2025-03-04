@@ -8,30 +8,25 @@ dotenv.config();
 
 const app = express();
 
-const corsOptions = {
-  origin: 'https://streamhivex.vercel.app', 
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-};
 
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); 
+app.use(cors());
+// Caso queira também definir para todas as rotas o OPTIONS:
+app.options('*', cors());
 
 app.use(express.json());
 
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: 'https://streamhivex.vercel.app',
+    origin: "*", // Permite qualquer origem
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
+    credentials: false, // para não ter conflito com '*'
   }
 });
 global.io = io;
 
-
-let latestPlayerStates = {}; 
+let latestPlayerStates = {};
 
 io.on('connection', (socket) => {
   console.log('Novo cliente conectado:', socket.id);
@@ -54,7 +49,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on('chat:new-message', (message) => {
-
     socket.to(message.roomId).emit('chat:new-message', message);
   });
 
@@ -67,7 +61,7 @@ io.on('connection', (socket) => {
   });
 });
 
-
+// Rotas
 const authRoutes = require('./routes/auth.routes');
 const streamsRoutes = require('./routes/streams.routes');
 const messagesRoutes = require('./routes/messages.routes');
