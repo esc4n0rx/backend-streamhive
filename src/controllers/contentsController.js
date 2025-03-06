@@ -1,14 +1,40 @@
+const cron = require('node-cron');
 const supabase = require('../config/supabase');
 const localCache = require('../cache/localCache');
 
-// Busca todos os registros em batches da tabela streamhive_conteudos
+/**
+ * Consulta o total de registros na tabela usando a opção head e count
+ */
+const getTotalRecords = async () => {
+  const { count, error } = await supabase
+    .from('streamhive_conteudos')
+    .select('id', { count: 'exact', head: true });
+  if (error) {
+    throw error;
+  }
+  return count;
+};
+
+/**
+ * Define um batch size compatível com base no total de registros.
+ * Neste exemplo, tentamos dividir os registros em aproximadamente 25 batches.
+ */
+const getCompatibleBatchSize = (totalRecords) => {
+  return Math.ceil(totalRecords / 25);
+};
+
+/**
+ * Busca todos os registros em batches da tabela streamhive_conteudos
+ */
 const getAllContentsInBatches = async () => {
-  const batchSize = 10000;
+  const total = await getTotalRecords();
+  const batchSize = getCompatibleBatchSize(total);
+  console.log(`Total de registros na tabela: ${total} | Batch size: ${batchSize}`);
+  
   let allData = [];
   let from = 0;
-  let finished = false;
 
-  while (!finished) {
+  while (from < total) {
     const { data, error } = await supabase
       .from('streamhive_conteudos')
       .select('nome, poster, categoria, subcategoria, url, temporadas, episodios')
@@ -19,20 +45,18 @@ const getAllContentsInBatches = async () => {
     }
 
     allData = allData.concat(data);
-
-    if (data.length < batchSize) {
-      finished = true;
-    } else {
-      from += batchSize;
-    }
+    from += batchSize;
   }
   return allData;
 };
 
-// Função para agrupar os conteúdos
-// - Agrupa por categoria
-// - Para subcategoria "Serie": agrupa por base do nome (removendo o sufixo " SxxExx")
-// - Para filmes, mantém como está
+/**
+ * Agrupa os conteúdos:
+ * - Agrupa por categoria.
+ * - Para itens com subcategoria "Serie": agrupa por base do nome (removendo o sufixo " SxxExx")
+ *   e coleta os episódios; a URL do grupo é a do primeiro episódio encontrado.
+ * - Para filmes, adiciona o registro individualmente.
+ */
 const groupContents = (data) => {
   const grouped = {};
 
@@ -43,7 +67,7 @@ const groupContents = (data) => {
     }
 
     if (item.subcategoria === 'Serie') {
-      // Remove o sufixo " SxxExx" para definir o nome base
+      // Remove o sufixo " SxxExx" para definir o nome base da série
       const baseName = item.nome.replace(/\s+S\d+E\d+$/i, '').trim();
       if (!grouped[categoria].series[baseName]) {
         grouped[categoria].series[baseName] = {
@@ -54,7 +78,7 @@ const groupContents = (data) => {
         };
       }
 
-      // Extrai season e episode do nome, se possível
+      // Tenta extrair season e episode do nome, se possível
       const match = item.nome.match(/S(\d+)E(\d+)$/i);
       if (match) {
         const season = parseInt(match[1], 10);
@@ -65,7 +89,7 @@ const groupContents = (data) => {
           url: item.url
         });
       } else {
-        // Caso não consiga extrair via nome, usa os campos disponibilizados
+        // Se não conseguir extrair pelo nome, usa os campos disponíveis
         grouped[categoria].series[baseName].episodios.push({
           season: item.temporadas || null,
           episode: item.episodios || null,
@@ -73,61 +97,59 @@ const groupContents = (data) => {
         });
       }
     } else {
-      // Para filmes, apenas adiciona à lista
+      // Para filmes, adiciona diretamente na lista
       grouped[categoria].filmes.push(item);
     }
   }
 
   // Converte o objeto de séries em array para cada categoria
   for (const categoria in grouped) {
-    const seriesObj = grouped[categoria].series;
-    grouped[categoria].series = Object.values(seriesObj);
+    grouped[categoria].series = Object.values(grouped[categoria].series);
   }
   return grouped;
 };
 
-// Endpoint para obter os conteúdos
-const getContents = async (req, res) => {
+/**
+ * Atualiza o cache local com os dados agrupados e informações adicionais:
+ * - totalRegistros: total de registros na tabela.
+ * - totalGerado: total de itens após o agrupamento.
+ * - contents: dados agrupados por categoria.
+ */
+const updateCache = async () => {
   try {
-    const cacheKey = 'contents_all';
-    const now = Date.now();
-    let data;
+    console.log('Iniciando atualização do cache de conteúdos...');
+    const allData = await getAllContentsInBatches();
+    const totalRegistros = await getTotalRecords();
+    const groupedContents = groupContents(allData);
 
-    // Usa o cache local se existir e não tiver expirado (1 hora)
-    if (localCache[cacheKey] && localCache[cacheKey].expires > now) {
-      console.log('Retornando dados do cache local');
-      data = localCache[cacheKey].data;
-    } else {
-      data = await getAllContentsInBatches();
-      localCache[cacheKey] = {
-        data: data,
-        expires: now + 3600000,
-      };
-    }
-
-    const totalRegistros = data.length;
-
-    // Agrupa os dados conforme regras para séries e filmes
-    const groupedContents = groupContents(data);
-
-    // Calcula o total gerado: soma do número de itens agrupados (filmes + grupos de séries)
     let totalGerado = 0;
     for (const categoria in groupedContents) {
       totalGerado += groupedContents[categoria].filmes.length;
       totalGerado += groupedContents[categoria].series.length;
     }
 
-    return res.status(200).json({
-      totalRegistros,
-      totalGerado,
-      contents: groupedContents
-    });
-  } catch (err) {
-    console.error('Erro interno do servidor:', err);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    localCache['contents_all'] = {
+      data: {
+        totalRegistros,
+        totalGerado,
+        contents: groupedContents
+      },
+      expires: Date.now() + 3600000, // Expira em 1 hora
+    };
+
+    console.log('Cache de conteúdos atualizado com sucesso.');
+  } catch (error) {
+    console.error('Erro ao atualizar o cache de conteúdos:', error);
   }
 };
 
-module.exports = {
-  getContents,
-};
+// Agenda o job para executar a cada hora (no minuto 0 de cada hora)
+cron.schedule('0 * * * *', () => {
+  console.log('Job do node-cron executado: Atualizando o cache de conteúdos.');
+  updateCache();
+});
+
+// Atualiza o cache imediatamente ao iniciar o serviço
+updateCache();
+
+module.exports = updateCache;
