@@ -30,27 +30,26 @@ const proxyVideo = (req, res) => {
 
   client.get(videoUrl, options, (videoRes) => {
     const contentType = videoRes.headers["content-type"] || "";
-    // Adiciona o header CORS para permitir requisições do seu frontend
+    // Adiciona o header CORS
     res.setHeader("Access-Control-Allow-Origin", "*");
 
     if (contentType.includes("application/vnd.apple.mpegurl")) {
-      // Se for um manifesto HLS, capture e modifique seu conteúdo
+      // Se for um manifesto HLS, capture e reescreva seu conteúdo
       let data = "";
       videoRes.setEncoding("utf8");
       videoRes.on("data", (chunk) => {
         data += chunk;
       });
       videoRes.on("end", () => {
-        // Reescreve URLs que começam com "http://" para que sejam encaminhadas pelo proxy
-        // Exemplo: substitui "http://exemplo.com/segment.ts" por "https://backend-streamhive.onrender.com/api/proxy?url=http%3A%2F%2Fexemplo.com%2Fsegment.ts"
-        const rewritten = data.replace(/(http:\/\/[^\s]+)/g, (match) => {
+        // Reescreve todas as ocorrências de URLs que começam com "http://"
+        const rewritten = data.replace(/http:\/\/[^\r\n]+/g, (match) => {
           return `https://backend-streamhive.onrender.com/api/proxy?url=${encodeURIComponent(match)}`;
         });
         res.writeHead(videoRes.statusCode, videoRes.headers);
         res.end(rewritten);
       });
     } else {
-      // Se não for um manifesto, repassa os dados normalmente
+      // Se não for um manifesto, encaminha os dados normalmente
       res.writeHead(videoRes.statusCode, videoRes.headers);
       videoRes.pipe(res);
     }
