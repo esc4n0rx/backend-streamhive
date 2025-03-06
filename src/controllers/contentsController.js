@@ -3,7 +3,7 @@ const supabase = require('../config/supabase');
 const localCache = require('../cache/localCache');
 
 /**
- * Consulta o total de registros na tabela usando a opção head e count
+ * Consulta o total de registros na tabela usando a opção head e count.
  */
 const getTotalRecords = async () => {
   const { count, error } = await supabase
@@ -17,14 +17,15 @@ const getTotalRecords = async () => {
 
 /**
  * Define um batch size compatível com base no total de registros.
- * Neste exemplo, tentamos dividir os registros em aproximadamente 25 batches.
+ * Neste exemplo, tenta-se dividir os registros em aproximadamente 25 batches.
+ * (Esse valor pode ser ajustado conforme a necessidade.)
  */
 const getCompatibleBatchSize = (totalRecords) => {
   return Math.ceil(totalRecords / 25);
 };
 
 /**
- * Busca todos os registros em batches da tabela streamhive_conteudos
+ * Busca todos os registros em batches da tabela streamhive_conteudos.
  */
 const getAllContentsInBatches = async () => {
   const total = await getTotalRecords();
@@ -143,13 +144,42 @@ const updateCache = async () => {
   }
 };
 
-// Agenda o job para executar a cada hora (no minuto 0 de cada hora)
+/**
+ * Função para obter os conteúdos via API.
+ * Se o cache estiver válido, retorna os dados do cache.
+ * Caso contrário, atualiza o cache e retorna os novos dados.
+ */
+const getContents = async (req, res) => {
+  try {
+    const cacheKey = 'contents_all';
+    const now = Date.now();
+    let responseData;
+
+    if (localCache[cacheKey] && localCache[cacheKey].expires > now) {
+      console.log('Retornando dados do cache local');
+      responseData = localCache[cacheKey].data;
+    } else {
+      await updateCache();
+      responseData = localCache[cacheKey] ? localCache[cacheKey].data : {};
+    }
+
+    return res.status(200).json(responseData);
+  } catch (error) {
+    console.error('Erro ao obter conteúdos:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor.' });
+  }
+};
+
+
 cron.schedule('0 * * * *', () => {
   console.log('Job do node-cron executado: Atualizando o cache de conteúdos.');
   updateCache();
 });
 
-// Atualiza o cache imediatamente ao iniciar o serviço
+
 updateCache();
 
-module.exports = updateCache;
+module.exports = {
+  getContents,
+  updateCache,
+};
