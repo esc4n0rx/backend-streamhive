@@ -29,7 +29,6 @@ const getAllContentsInBatches = async () => {
   return allData;
 };
 
-
 const updateCache = async () => {
   try {
     console.log('Iniciando atualização do cache de conteúdos...');
