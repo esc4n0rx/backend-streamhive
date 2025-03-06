@@ -1,6 +1,11 @@
 const supabase = require('../config/supabase');
-const redisClient = require('../cache/redisClient');
 
+// Cache local em memória
+let localCache = {};
+
+/**
+ * Função que busca todos os conteúdos em batches para evitar consultas pesadas.
+ */
 const getAllContentsInBatches = async () => {
   const batchSize = 10000; // Tamanho do lote
   let allData = [];
@@ -28,22 +33,28 @@ const getAllContentsInBatches = async () => {
   return allData;
 };
 
+/**
+ * Função que retorna os conteúdos, utilizando cache local para evitar buscas pesadas.
+ */
 const getContents = async (req, res) => {
   try {
     const cacheKey = 'contents_all';
+    const now = Date.now();
 
-    // Verifica se os dados já estão em cache
-    const cachedData = await redisClient.get(cacheKey);
-    if (cachedData) {
-      console.log('Retornando dados do cache Redis');
-      return res.status(200).json({ contents: JSON.parse(cachedData) });
+    // Verifica se os dados já estão em cache e se o cache ainda é válido
+    if (localCache[cacheKey] && localCache[cacheKey].expires > now) {
+      console.log('Retornando dados do cache local');
+      return res.status(200).json({ contents: localCache[cacheKey].data });
     }
 
-    // Se não estiver em cache, busca os dados em batch
+    // Se não estiver em cache ou o cache expirou, busca os dados em batches
     const data = await getAllContentsInBatches();
 
-    // Armazena os dados no Redis com expiração de 1 hora (3600 segundos)
-    await redisClient.setEx(cacheKey, 3600, JSON.stringify(data));
+    // Armazena os dados no cache local com expiração de 1 hora (3600000 ms)
+    localCache[cacheKey] = {
+      data: data,
+      expires: now + 3600000,
+    };
 
     return res.status(200).json({ contents: data });
   } catch (err) {

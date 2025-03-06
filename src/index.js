@@ -11,7 +11,6 @@ const app = express();
 
 
 app.use(cors());
-// Caso queira também definir para todas as rotas o OPTIONS:
 app.options('*', cors());
 
 app.use(express.json());
@@ -19,10 +18,10 @@ app.use(express.json());
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "*", // Permite qualquer origem
+    origin: "*", 
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: false, // para não ter conflito com '*'
+    credentials: false, 
   }
 });
 global.io = io;
@@ -62,7 +61,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// Rotas
 const authRoutes = require('./routes/auth.routes');
 const streamsRoutes = require('./routes/streams.routes');
 const messagesRoutes = require('./routes/messages.routes');
