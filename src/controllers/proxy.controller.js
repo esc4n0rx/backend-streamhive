@@ -7,7 +7,7 @@ const allowedProtocols = ["http:", "https:"];
 const proxyVideo = (req, res) => {
   const videoUrl = req.query.url;
   console.log("[Proxy] Requisição recebida para URL:", videoUrl);
-  
+
   if (!videoUrl) {
     console.error("[Proxy] Parâmetro 'url' não fornecido.");
     return res.status(400).json({ message: "Parâmetro 'url' é obrigatório." });
@@ -38,12 +38,41 @@ const proxyVideo = (req, res) => {
   };
 
   console.log("[Proxy] Iniciando requisição com as opções:", options);
-  
-  const proxyReq = client.request(videoUrl, options, (videoRes) => {
+
+  const handleResponse = (videoRes) => {
     console.log("[Proxy] Resposta recebida. Status:", videoRes.statusCode);
-    console.log("[Proxy] Cabeçalhos originais da resposta:", videoRes.headers);
-    
-    // Set CORS headers
+    console.log("[Proxy] Cabeçalhos da resposta:", videoRes.headers);
+
+    // Se houver redirecionamento, siga-o
+    if (
+      videoRes.statusCode >= 300 &&
+      videoRes.statusCode < 400 &&
+      videoRes.headers.location
+    ) {
+      const redirectUrl = videoRes.headers.location;
+      console.log("[Proxy] Redirecionamento detectado para:", redirectUrl);
+      const redirectClient = new URL(redirectUrl).protocol === "http:" ? http : https;
+      // Faz nova requisição para a URL de redirecionamento
+      redirectClient.get(redirectUrl, options, (redirectRes) => {
+        console.log("[Proxy] Resposta do redirecionamento. Status:", redirectRes.statusCode);
+        // Trata a resposta redirecionada como se fosse a original
+        processResponse(redirectRes);
+      }).on("error", (err) => {
+        console.error("[Proxy] Erro ao seguir redirecionamento:", err);
+        res.status(500).json({
+          message: "Erro ao seguir redirecionamento.",
+          error: err.message,
+          url: redirectUrl,
+        });
+      });
+    } else {
+      processResponse(videoRes);
+    }
+  };
+
+  // Função que processa a resposta, reescrevendo o manifesto se necessário
+  const processResponse = (videoRes) => {
+    // Define os headers CORS
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Range");
@@ -59,29 +88,27 @@ const proxyVideo = (req, res) => {
       contentType.includes("application/dash+xml") ||
       videoUrl.endsWith(".mpd")
     ) {
-      console.log("[Proxy] Manifest HLS/DASH detectado. Iniciando reescrita.");
+      console.log("[Proxy] Manifest detectado. Iniciando reescrita do manifesto.");
       let data = "";
       videoRes.setEncoding("utf8");
       videoRes.on("data", (chunk) => {
-        console.log("[Proxy] Recebido chunk do manifesto. Tamanho:", chunk.length);
+        console.log("[Proxy] Chunk recebido do manifesto. Tamanho:", chunk.length);
         data += chunk;
       });
-      
       videoRes.on("end", () => {
-        console.log("[Proxy] Final do manifesto recebido. Tamanho total:", data.length);
+        console.log("[Proxy] Manifest recebido. Tamanho total:", data.length);
         const baseUrl = getBaseUrl(videoUrl);
         console.log("[Proxy] Base URL para resolução de URLs relativas:", baseUrl);
         const proxyBaseUrl = "https://" + req.get("host") + "/api/proxy?url=";
         console.log("[Proxy] Proxy Base URL:", proxyBaseUrl);
 
-        // Reescreve todas as URLs que começam com "http://" (ou "https://") no manifesto
-        const rewritten = data.replace(/https?:\/\/[^\r\n'"]+/g, (match) => {
-          console.log("[Proxy] Reescrevendo URL:", match);
+        // Reescreve todas as URLs absolutas que comecem com http:// ou https://
+        let rewritten = data.replace(/https?:\/\/[^\r\n'"]+/g, (match) => {
+          console.log("[Proxy] Reescrevendo URL encontrada:", match);
           return `${proxyBaseUrl}${encodeURIComponent(match)}`;
         });
-        
+
         console.log("[Proxy] Manifest reescrito. Tamanho:", rewritten.length);
-        // Remove content-length pois o tamanho pode ter mudado
         const headers = { ...videoRes.headers };
         delete headers["content-length"];
         res.writeHead(videoRes.statusCode, headers);
@@ -92,31 +119,33 @@ const proxyVideo = (req, res) => {
       res.writeHead(videoRes.statusCode, videoRes.headers);
       videoRes.pipe(res);
     }
-  });
+  };
+
+  const proxyReq = client.request(videoUrl, options, handleResponse);
 
   proxyReq.on("error", (err) => {
     console.error("[Proxy] Erro na requisição para URL:", videoUrl, err);
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Erro ao buscar o recurso.",
       error: err.message,
-      url: videoUrl
+      url: videoUrl,
     });
   });
 
-  // Se for um método POST e houver corpo, encaminha o corpo
+  // Se for POST e houver corpo, encaminha o corpo
   if (req.method === "POST" && req.body) {
     console.log("[Proxy] Encaminhando corpo da requisição POST.");
     proxyReq.write(JSON.stringify(req.body));
   }
-  
+
   proxyReq.end();
 };
 
-// Função auxiliar para obter a base URL (usada para reescrever URLs relativas)
+// Helper para obter a base URL para resolução de URLs relativas
 function getBaseUrl(urlString) {
   const parsed = new URL(urlString);
   const pathParts = parsed.pathname.split("/");
-  pathParts.pop(); // remove o nome do arquivo
+  pathParts.pop(); // Remove o nome do arquivo
   const pathWithoutFile = pathParts.join("/");
   return `${parsed.protocol}//${parsed.host}${pathWithoutFile}/`;
 }
