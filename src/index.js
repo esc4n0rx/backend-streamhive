@@ -67,7 +67,7 @@ const streamsRoutes = require('./routes/streams.routes');
 const messagesRoutes = require('./routes/messages.routes');
 const reactionsRoutes = require('./routes/reactions.routes');
 const proxyRoutes = require('./routes/proxy.routes');
-const contentsRouter = require('./routes/contents');
+const contentsRouter = require('./routes/content.route');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/streams', streamsRoutes);
