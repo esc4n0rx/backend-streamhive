@@ -1,6 +1,33 @@
 const supabase = require('../config/supabase');
 const redisClient = require('../cache/redisClient');
 
+const getAllContentsInBatches = async () => {
+  const batchSize = 10000; // Tamanho do lote
+  let allData = [];
+  let from = 0;
+  let finished = false;
+
+  while (!finished) {
+    const { data, error } = await supabase
+      .from('contents')
+      .select('nome, poster, categoria, subcategoria, url, temporadas, episodios')
+      .range(from, from + batchSize - 1);
+
+    if (error) {
+      throw error;
+    }
+
+    allData = allData.concat(data);
+
+    if (data.length < batchSize) {
+      finished = true;
+    } else {
+      from += batchSize;
+    }
+  }
+  return allData;
+};
+
 const getContents = async (req, res) => {
   try {
     const cacheKey = 'contents_all';
@@ -12,15 +39,8 @@ const getContents = async (req, res) => {
       return res.status(200).json({ contents: JSON.parse(cachedData) });
     }
 
-    // Consulta otimizada no Supabase para buscar somente os campos necessários
-    const { data, error } = await supabase
-      .from('contents')
-      .select('nome, poster, categoria, subcategoria, url, temporadas, episodios');
-
-    if (error) {
-      console.error('Erro ao consultar conteúdos no Supabase:', error);
-      return res.status(500).json({ error: 'Erro ao buscar conteúdos.' });
-    }
+    // Se não estiver em cache, busca os dados em batch
+    const data = await getAllContentsInBatches();
 
     // Armazena os dados no Redis com expiração de 1 hora (3600 segundos)
     await redisClient.setEx(cacheKey, 3600, JSON.stringify(data));
