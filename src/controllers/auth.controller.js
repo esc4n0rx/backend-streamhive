@@ -35,14 +35,14 @@ const register = async (req, res) => {
       return res.status(500).json({ message: 'Erro ao criar usuário.', error });
     }
 
-    // Gera o token JWT
+    // Gera o token JWT incluindo o id do usuário
     const token = jwt.sign(
       { id: data.id, email: data.email },
       process.env.JWT_SECRET,
       { expiresIn: '1d' }
     );
 
-    return res.status(201).json({ message: 'Usuário cadastrado com sucesso!', token });
+    return res.status(201).json({ message: 'Usuário cadastrado com sucesso!', token, id: data.id });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: 'Erro interno.' });
@@ -73,14 +73,14 @@ const login = async (req, res) => {
       return res.status(400).json({ message: 'Senha incorreta.' });
     }
 
-    // Gera o token JWT
+    // Gera o token JWT incluindo o id do usuário
     const token = jwt.sign(
       { id: user.id, email: user.email },
       process.env.JWT_SECRET,
       { expiresIn: '1d' }
     );
 
-    return res.status(200).json({ message: 'Login bem-sucedido!', token });
+    return res.status(200).json({ message: 'Login bem-sucedido!', token, id: user.id });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: 'Erro interno.' });
