@@ -42,6 +42,14 @@ io.on('connection', (socket) => {
     socket.to(roomId).emit('user:joined', { event: 'user:joined', data: { username: 'Novo usuário' } });
   });
 
+  socket.on('player:play', (payload) => {
+    const { roomId, data } = payload;
+    latestPlayerStates[roomId] = data;
+    console.log(`Socket ${socket.id} acionou player:play na sala ${roomId}`, data);
+    
+    io.in(roomId).emit('player:start', data);
+  });
+
   socket.on('player:update', (payload) => {
     const { roomId, data } = payload;
     latestPlayerStates[roomId] = data;
@@ -60,6 +68,7 @@ io.on('connection', (socket) => {
     console.log('Cliente desconectado:', socket.id);
   });
 });
+
 
 const authRoutes = require('./routes/auth.routes');
 const streamsRoutes = require('./routes/streams.routes');
