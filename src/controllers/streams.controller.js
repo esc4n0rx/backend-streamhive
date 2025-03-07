@@ -18,12 +18,14 @@ const listPublicStreams = async (req, res) => {
           .select('*', { count: 'exact', head: true })
           .eq('stream_id', stream.id);
 
+        // Retorna também o host_id
         if (countError) {
           return {
             id: stream.id,
             title: stream.title,
             description: stream.description,
             host: stream.streamhive_users ? stream.streamhive_users.name : 'Desconhecido',
+            host_id: stream.host_id,
             isPublic: stream.is_public,
             videoUrl: stream.video_url,
             viewers: 0
@@ -34,6 +36,7 @@ const listPublicStreams = async (req, res) => {
           title: stream.title,
           description: stream.description,
           host: stream.streamhive_users ? stream.streamhive_users.name : 'Desconhecido',
+          host_id: stream.host_id,
           isPublic: stream.is_public,
           videoUrl: stream.video_url,
           viewers: count || 0
@@ -48,38 +51,37 @@ const listPublicStreams = async (req, res) => {
   }
 };
 
-
 const createStream = async (req, res) => {
-    const { title, description, isPublic, videoUrl } = req.body;
-    if (!title || !videoUrl) {
-      return res.status(400).json({ message: 'Title e videoUrl são obrigatórios.' });
+  const { title, description, isPublic, videoUrl } = req.body;
+  if (!title || !videoUrl) {
+    return res.status(400).json({ message: 'Title e videoUrl são obrigatórios.' });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('streamhive_streams')
+      .insert([{
+        title,
+        description,
+        is_public: isPublic,
+        video_url: videoUrl,
+        host_id: req.user.id
+      }])
+      .select()
+      .single();
+
+    if (error || !data) {
+      return res.status(500).json({ message: 'Erro ao criar sala.', error });
     }
-  
-    try {
-      const { data, error } = await supabase
-        .from('streamhive_streams')
-        .insert([{
-          title,
-          description,
-          is_public: isPublic,
-          video_url: videoUrl,
-          host_id: req.user.id
-        }])
-        .select()
-        .single();
-  
-      if (error || !data) {
-        return res.status(500).json({ message: 'Erro ao criar sala.', error });
-      }
-  
-      const streamId = data.id;
-      const link = `https://streamhivex.vercel.app/stream/${streamId}`;
-      return res.status(201).json({ message: 'Sala criada com sucesso!', streamId, link });
-    } catch (err) {
-      console.error(err);
-      return res.status(500).json({ message: 'Erro interno.' });
-    }
-  };
+
+    const streamId = data.id;
+    const link = `https://streamhivex.vercel.app/stream/${streamId}`;
+    return res.status(201).json({ message: 'Sala criada com sucesso!', streamId, link });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Erro interno.' });
+  }
+};
 
 const getStreamDetails = async (req, res) => {
   const { id } = req.params;
@@ -113,11 +115,13 @@ const getStreamDetails = async (req, res) => {
       return res.status(500).json({ message: 'Erro ao contar espectadores.' });
     }
 
+    // Retorna também o host_id
     return res.status(200).json({
       id: stream.id,
       title: stream.title,
       description: stream.description,
       host: host.name,
+      host_id: stream.host_id,
       isPublic: stream.is_public,
       videoUrl: stream.video_url,
       viewers: count
@@ -149,7 +153,7 @@ const joinStream = async (req, res) => {
     }
 
     if (global.io) {
-      global.io.to(id).emit('user:joined', { username: req.user.email });
+      global.io.to(id).emit('user:joined', { event: 'user:joined', data: { username: req.user.email } });
     }
 
     return res.status(200).json({ message: 'Usuário entrou na sala', viewers: count });
