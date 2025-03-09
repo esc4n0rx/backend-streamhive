@@ -34,10 +34,9 @@ io.on('connection', (socket) => {
   socket.on('join-room', (roomId) => {
     socket.join(roomId);
     console.log(`Socket ${socket.id} entrou na sala ${roomId}`);
-    
-    if (latestPlayerStates[roomId]) {
-      socket.emit('player:update', { event: 'player:update', data: latestPlayerStates[roomId] });
-    }
+    // if (latestPlayerStates[roomId]) {
+    //   socket.emit('player:update', { event: 'player:update', data: latestPlayerStates[roomId] });
+    // }
     
     socket.to(roomId).emit('user:joined', { event: 'user:joined', data: { username: 'Novo usuário' } });
   });
@@ -49,6 +48,16 @@ io.on('connection', (socket) => {
     
     io.in(roomId).emit('player:start', data);
   });
+
+
+  socket.on('request:sync', (payload) => {
+    const { roomId } = payload;
+    console.log(`Socket ${socket.id} solicitou sincronização na sala ${roomId}`);
+    if (latestPlayerStates[roomId]) {
+      socket.emit('player:sync', latestPlayerStates[roomId]);
+    }
+  });
+  
 
   socket.on('player:update', (payload) => {
     const { roomId, data } = payload;

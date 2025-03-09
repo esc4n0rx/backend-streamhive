@@ -10,7 +10,7 @@ const getAllContentsInBatches = async () => {
 
   while (!finished) {
     const { data, error } = await supabase
-      .from('streamhive_conteudos')
+      .from('streamhivex_conteudos')
       .select('nome, poster, categoria, subcategoria, url, temporadas, episodios')
       .range(from, from + batchSize - 1);
 
