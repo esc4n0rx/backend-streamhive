@@ -74,6 +74,12 @@ io.on('connection', (socket) => {
     socket.to(data.roomId).emit('reaction:sent', data);
   });
 
+  socket.on('stream:ended', (payload) => {
+    const { roomId } = payload;
+    console.log(`Socket ${socket.id} encerrou a transmissão na sala ${roomId}`);
+    io.in(roomId).emit('stream:ended');
+  });
+
   socket.on('disconnect', () => {
     console.log('Cliente desconectado:', socket.id);
   });
