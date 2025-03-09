@@ -9,8 +9,14 @@ dotenv.config();
 
 const app = express();
 
+// Configure o CORS de forma explícita:
+app.use(cors({
+  origin: '*', // Permite qualquer origem. Se estiver usando credenciais, substitua por uma lista de origens permitidas.
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
-app.use(cors());
+// Tratamento para requisições OPTIONS
 app.options('*', cors());
 
 app.use(express.json());
@@ -26,6 +32,7 @@ const io = socketIo(server, {
 });
 global.io = io;
 
+// Resto do código permanece...
 let latestPlayerStates = {};
 
 io.on('connection', (socket) => {
@@ -34,9 +41,6 @@ io.on('connection', (socket) => {
   socket.on('join-room', (roomId) => {
     socket.join(roomId);
     console.log(`Socket ${socket.id} entrou na sala ${roomId}`);
-    // if (latestPlayerStates[roomId]) {
-    //   socket.emit('player:update', { event: 'player:update', data: latestPlayerStates[roomId] });
-    // }
     
     socket.to(roomId).emit('user:joined', { event: 'user:joined', data: { username: 'Novo usuário' } });
   });
@@ -45,10 +49,8 @@ io.on('connection', (socket) => {
     const { roomId, data } = payload;
     latestPlayerStates[roomId] = data;
     console.log(`Socket ${socket.id} acionou player:play na sala ${roomId}`, data);
-    
     io.in(roomId).emit('player:start', data);
   });
-
 
   socket.on('request:sync', (payload) => {
     const { roomId } = payload;
@@ -57,7 +59,6 @@ io.on('connection', (socket) => {
       socket.emit('player:sync', latestPlayerStates[roomId]);
     }
   });
-  
 
   socket.on('player:update', (payload) => {
     const { roomId, data } = payload;
@@ -77,7 +78,6 @@ io.on('connection', (socket) => {
     console.log('Cliente desconectado:', socket.id);
   });
 });
-
 
 const authRoutes = require('./routes/auth.routes');
 const streamsRoutes = require('./routes/streams.routes');

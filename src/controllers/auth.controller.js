@@ -48,6 +48,11 @@ const register = async (req, res) => {
 
 
 const login = async (req, res) => {
+
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ message: 'Email e senha são obrigatórios.' });
